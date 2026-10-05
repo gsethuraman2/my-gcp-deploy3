@@ -1,0 +1,60 @@
+---
+- name: Deploy Python Hello World App to GCP
+  hosts: webserver
+  become: true
+
+  tasks:
+    - name: Update apt cache and install dependencies
+      apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Create app directory
+      file:
+        path: /opt/hello-world
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Copy app files
+      copy:
+        src: "{{ item }}"
+        dest: /opt/hello-world/
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - app.py
+        - requirements.txt
+
+    - name: Create virtual environment and install dependencies
+      pip:
+        requirements: /opt/hello-world/requirements.txt
+        virtualenv: /opt/hello-world/venv
+
+    - name: Create systemd service for app
+      copy:
+        dest: /etc/systemd/system/helloworld.service
+        content: |
+          [Unit]
+          Description=Python Hello World Web App
+          After=network.target
+
+          [Service]
+          User=ubuntu
+          WorkingDirectory=/opt/hello-world
+          ExecStart=/opt/hello-world/venv/bin/gunicorn --bind 0.0.0.0:8080 app:app
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd, enable and start service
+      systemd:
+        name: helloworld
+        daemon_reload: yes
+        state: restarted
+        enabled: yes
